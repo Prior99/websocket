@@ -11,6 +11,7 @@ public class Main
 			WebsocketClient wsc = new WebsocketClient(new Socket("cronosx.de", 5560));
 			wsc.send("{\"name\":\"Frederick\",\"password\":\"123\",\"_requestID\":\"LoginUser\",\"_type\":\"Request\",\"_responseID\":1}");
 			wsc.send("{\"name\":\"Test\",\"password\":\"123\",\"_requestID\":\"Login\",\"_type\":\"Request\",\"_responseID\":0}");
+			wsc.close();
 		} 
 		catch (IOException e) {
 			e.printStackTrace();

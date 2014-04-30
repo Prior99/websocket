@@ -171,6 +171,11 @@ public abstract class Websocket extends Thread
 	}
 	
 	public void close() throws IOException {
+		int opcode = 128 | 8; // Indicates a closing frame
+		int len = 0; //Indicates an empty message
+		outputStream.write(opcode);
+		outputStream.write(len);
+		outputStream.flush();
 		shutdown();
 	}
 	
