@@ -174,9 +174,53 @@ public abstract class Websocket extends Thread
 		shutdown();
 	}
 	
-	public void send(String string) {
+	public void send(String string) throws IOException {
 		byte[] bytes = string.getBytes();
-		
+		int opcode = 128 | 1; //Opcode for 'Final message and string'
+		outputStream.write(opcode);
+		int len1 = 0;
+		if(maskOutput()) len1 |= 128; //If we have to mask the output, we will set this bit to 1
+		if(bytes.length <= 125) {
+			len1 |= bytes.length;
+			outputStream.write(len1);
+		}
+		else if(bytes.length <= 1<<16) {
+			len1 |= 126;
+			byte[] length = new byte[2];
+			length[0] = (byte) (bytes.length >> 8 & 0xFF); // Byte 1
+			length[1] = (byte) (bytes.length      & 0xFF); // Byte 0
+			outputStream.write(len1);
+			outputStream.write(length);
+		}
+		else if(bytes.length <= 1<<31) { //Note: Theoretically websocket supports messages as long as unsigned integer of length of 64bit supports
+			//But who the fuck would send 16,3 Exabyte via a websocket?
+			//Let's just assume, that 2 Gigabytes should be enough for everybody.
+			//If you intend to send messages with a payload larger than 2 Gigabytes please consider using a stream,
+			//Framing your message or consulting a psychiatrist
+			len1 |= 127;
+			byte[] length = new byte[8];
+			//Please note, that length[0...3] are left empty (0) as we will consider no message greater than 2 Gigabytes (as java cannot handle that huge numbers) 
+			length[4] = (byte) (bytes.length >> 24 & 0xFF); // Byte 3
+			length[5] = (byte) (bytes.length >> 16 & 0xFF); // Byte 2
+			length[6] = (byte) (bytes.length >>  8 & 0xFF); // Byte 1
+			length[7] = (byte) (bytes.length       & 0xFF); // Byte 0
+			outputStream.write(len1);
+			outputStream.write(length);	
+		}
+		else {
+			throw new UnsupportedOperationException("Message exceeded maximum size of 2^31 bytes.");
+		}
+		if(maskOutput()) {
+			byte[] mask = new byte[4];
+			for(int i = 0; i < 4; i++) {
+				mask[i] = (byte)(Math.random() * 255 - 128);
+			}
+			outputStream.write(mask);
+			for(int i = 0; i < bytes.length; i++) {
+				bytes[i] ^= mask[i % 4];
+			}
+		}
+		outputStream.write(bytes);
+		outputStream.flush();
 	}
-
 }
