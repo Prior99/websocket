@@ -1,51 +1,55 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-
 package de.cronosx.websocket;
 
-import java.io.*;
+import java.io.IOException;
 import java.net.*;
+import java.util.*;
 
-/**
- *
- * @author prior
- */
-public class WebsocketServer extends Websocket
-{
-	private final HTTP response;
-	private final HTTP request;	
-
-	public WebsocketServer(Socket socket) throws IOException
-	{
-		super(socket);
-		request = new HTTP();
-		response = new HTTP();
-		readHeader();
-		sendHeader();
+public class WebsocketServer extends Thread {
+	private ServerSocket server;
+	private final int port;
+	private final List<ConnectHandler> connectHandlers;
+	
+	public WebsocketServer(int port) {
+		connectHandlers = new LinkedList<ConnectHandler>();
+		this.port = port;
 	}
 	
-	private void readHeader() throws IOException {
-		request.readHeader(socket.getInputStream());
+	public void addConnectHandler(ConnectHandler handler) {
+		connectHandlers.add(handler);
 	}
 	
-	private void sendHeader() {
-		String host = request.get("Host");
-		String key = request.get("Sec-WebSocket-Key");
-		
-		response.setRequest("HTTP/1.1 101 Switching Protocols");
-		response.add("Connection", "Upgrade");
-		response.add("Upgrade", "websocket");
-		response.add("Sec-Websocket-Host", request.get("Host"));
-		response.add("Sec-Websocket-Accept", generateHandshake(key));
+	public void removeConnectHandler(ConnectHandler handler) {
+		connectHandlers.remove(handler);
 	}
-
+	
+	public void listen() throws IOException {
+		this.server = new ServerSocket(port);
+		this.start();
+	}
+	
 	@Override
-	protected boolean maskOutput()
-	{
-		return false;
+	public void run() {
+		while(!isInterrupted()) {
+			try {
+				Socket socket = server.accept();
+				ServerWebsocket sws = new ServerWebsocket(socket);
+				for(ConnectHandler handler : connectHandlers) {
+					handler.onConnect(sws);
+				}
+			} 
+			catch (IOException e) {
+				break;
+			}
+		}
 	}
 	
+	public void close() {
+		try {
+			interrupt();
+			server.close();
+		} 
+		catch(IOException e) {
+			
+		}
+	}
 }

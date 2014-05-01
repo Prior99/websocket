@@ -13,11 +13,11 @@ import java.net.*;
  *
  * @author prior
  */
-public class WebsocketClient extends Websocket {
+public class ClientWebsocket extends Websocket {
 	private final HTTP response;
 	private final HTTP request;	
 	
-	public WebsocketClient(Socket socket) throws IOException {
+	public ClientWebsocket(Socket socket) throws IOException {
 		super(socket);
 		request = new HTTP();
 		response = new HTTP();

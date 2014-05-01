@@ -2,14 +2,7 @@ package de.cronosx.websocket;
 
 import java.io.*;
 import java.net.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-/**
- * @author prior
- * This is a wrapped socket that parses the pure byte-input with the Websocketprotocol and return the decoded code
- * and the other way around encrypts messages and passes them to the client
- */
+import java.util.*;
 
 /*
  *       | FIN|  R1|  R2|  R3| OP1| OP2| OP3| OP4 
@@ -24,17 +17,52 @@ import java.util.logging.Logger;
  *                ... Reserved ...
  */
 
+/**
+ * @author prior
+ * This is a wrapped socket that parses the pure byte-input with the Websocketprotocol and return the decoded code
+ * and the other way around encrypts messages and passes them to the client
+ */
 public abstract class Websocket extends Thread
 {
 	
 	protected final Socket socket;
 	private final InputStream inputStream;
 	private final OutputStream outputStream;
+	private final List<CloseHandler> closeHandlers;
+	private final List<OpenHandler> openHandlers;
+	private final List<MessageHandler> messageHandlers;
 	
 	public Websocket(final Socket socket) throws IOException {
+		closeHandlers = new LinkedList<CloseHandler>();
+		openHandlers = new LinkedList<OpenHandler>();
+		messageHandlers = new LinkedList<MessageHandler>();
 		this.socket = socket;
 		this.inputStream = socket.getInputStream();
 		this.outputStream = socket.getOutputStream();
+	}
+	
+	public void addCloseHandler(CloseHandler handler) {
+		closeHandlers.add(handler);
+	}
+	
+	public void removeCloseHandler(CloseHandler handler) {
+		closeHandlers.remove(handler);
+	}
+	
+	public void addOpenHandler(OpenHandler handler) {
+		openHandlers.add(handler);
+	}
+	
+	public void removeOpenHandler(OpenHandler handler) {
+		openHandlers.remove(handler);
+	}
+	
+	public void addMessageHandler(MessageHandler handler) {
+		messageHandlers.add(handler);
+	}
+	
+	public void removeMessageHandler(MessageHandler handler) {
+		messageHandlers.remove(handler);
 	}
 	
 	protected void listen() {
@@ -44,13 +72,25 @@ public abstract class Websocket extends Thread
 	
 	@Override
 	public void run() {
+		for(OpenHandler handler : openHandlers) {
+			handler.onOpen();
+		}
 		while(!isInterrupted()) {
 			try {
 				String message = readMessage();
-				System.out.println(message);
+				if(message == null) {
+					return;
+				}
+				else {
+					for(MessageHandler handler : messageHandlers) {
+						handler.onMessage(message);
+					}
+				}
+				
 			} 
 			catch (IOException e) {
-				e.printStackTrace();
+				shutdown();
+				return;
 			}
 		}
 	}
@@ -85,7 +125,7 @@ public abstract class Websocket extends Thread
 				shutdown();
 				return null;
 			}
-			long length = 0;
+			long length;
 			int lenIndicator = secondbyte & 127; //This only leaves the last 7 bits (as the first bit indicates the masking.
 			if(lenIndicator <= 125) length = lenIndicator; //If the indicator is less than 126, that is the length
 			else if(lenIndicator == 126) {//If the indicator is 126, the next 2 bytes indicate the length
@@ -165,67 +205,85 @@ public abstract class Websocket extends Thread
 		return b;
 	}
 	
-	private void shutdown() throws IOException {
-		interrupt();
-		socket.close();
+	private void shutdown() {
+		for(CloseHandler handler : closeHandlers) {
+			handler.onClose();
+		}
+		try {
+			interrupt();
+			socket.close();
+		}
+		catch(IOException e) {
+			
+		}
 	}
 	
-	public void close() throws IOException {
+	public void close() {
 		int opcode = 128 | 8; // Indicates a closing frame
 		int len = 0; //Indicates an empty message
-		outputStream.write(opcode);
-		outputStream.write(len);
-		outputStream.flush();
+		try {
+			outputStream.write(opcode);
+			outputStream.write(len);
+			outputStream.flush();
+		}
+		catch(IOException e) {
+			
+		}
 		shutdown();
 	}
 	
-	public void send(String string) throws IOException {
-		byte[] bytes = string.getBytes();
-		int opcode = 128 | 1; //Opcode for 'Final message and string'
-		outputStream.write(opcode);
-		int len1 = 0;
-		if(maskOutput()) len1 |= 128; //If we have to mask the output, we will set this bit to 1
-		if(bytes.length <= 125) {
-			len1 |= bytes.length;
-			outputStream.write(len1);
-		}
-		else if(bytes.length <= 1<<16) {
-			len1 |= 126;
-			byte[] length = new byte[2];
-			length[0] = (byte) (bytes.length >> 8 & 0xFF); // Byte 1
-			length[1] = (byte) (bytes.length      & 0xFF); // Byte 0
-			outputStream.write(len1);
-			outputStream.write(length);
-		}
-		else if(bytes.length <= 1<<31) { //Note: Theoretically websocket supports messages as long as unsigned integer of length of 64bit supports
-			//But who the fuck would send 16,3 Exabyte via a websocket?
-			//Let's just assume, that 2 Gigabytes should be enough for everybody.
-			//If you intend to send messages with a payload larger than 2 Gigabytes please consider using a stream,
-			//Framing your message or consulting a psychiatrist
-			len1 |= 127;
-			byte[] length = new byte[8];
-			//Please note, that length[0...3] are left empty (0) as we will consider no message greater than 2 Gigabytes (as java cannot handle that huge numbers) 
-			length[4] = (byte) (bytes.length >> 24 & 0xFF); // Byte 3
-			length[5] = (byte) (bytes.length >> 16 & 0xFF); // Byte 2
-			length[6] = (byte) (bytes.length >>  8 & 0xFF); // Byte 1
-			length[7] = (byte) (bytes.length       & 0xFF); // Byte 0
-			outputStream.write(len1);
-			outputStream.write(length);	
-		}
-		else {
-			throw new UnsupportedOperationException("Message exceeded maximum size of 2^31 bytes.");
-		}
-		if(maskOutput()) {
-			byte[] mask = new byte[4];
-			for(int i = 0; i < 4; i++) {
-				mask[i] = (byte)(Math.random() * 255 - 128);
+	public void send(String string)  {
+		try {
+			byte[] bytes = string.getBytes();
+			int opcode = 128 | 1; //Opcode for 'Final message and string'
+			outputStream.write(opcode);
+			int len1 = 0;
+			if(maskOutput()) len1 |= 128; //If we have to mask the output, we will set this bit to 1
+			if(bytes.length <= 125) {
+				len1 |= bytes.length;
+				outputStream.write(len1);
 			}
-			outputStream.write(mask);
-			for(int i = 0; i < bytes.length; i++) {
-				bytes[i] ^= mask[i % 4];
+			else if(bytes.length <= 1<<16) {
+				len1 |= 126;
+				byte[] length = new byte[2];
+				length[0] = (byte) (bytes.length >> 8 & 0xFF); // Byte 1
+				length[1] = (byte) (bytes.length      & 0xFF); // Byte 0
+				outputStream.write(len1);
+				outputStream.write(length);
 			}
+			else if(bytes.length <= 1<<31) { //Note: Theoretically websocket supports messages as long as unsigned integer of length of 64bit supports
+				//But who the fuck would send 16,3 Exabyte via a websocket?
+				//Let's just assume, that 2 Gigabytes should be enough for everybody.
+				//If you intend to send messages with a payload larger than 2 Gigabytes please consider using a stream,
+				//Framing your message or consulting a psychiatrist
+				len1 |= 127;
+				byte[] length = new byte[8];
+				//Please note, that length[0...3] are left empty (0) as we will consider no message greater than 2 Gigabytes (as java cannot handle that huge numbers) 
+				length[4] = (byte) (bytes.length >> 24 & 0xFF); // Byte 3
+				length[5] = (byte) (bytes.length >> 16 & 0xFF); // Byte 2
+				length[6] = (byte) (bytes.length >>  8 & 0xFF); // Byte 1
+				length[7] = (byte) (bytes.length       & 0xFF); // Byte 0
+				outputStream.write(len1);
+				outputStream.write(length);	
+			}
+			else {
+				throw new UnsupportedOperationException("Message exceeded maximum size of 2^31 bytes.");
+			}
+			if(maskOutput()) {
+				byte[] mask = new byte[4];
+				for(int i = 0; i < 4; i++) {
+					mask[i] = (byte)(Math.random() * 255 - 128);
+				}
+				outputStream.write(mask);
+				for(int i = 0; i < bytes.length; i++) {
+					bytes[i] ^= mask[i % 4];
+				}
+			}
+			outputStream.write(bytes);
+			outputStream.flush();
 		}
-		outputStream.write(bytes);
-		outputStream.flush();
+		catch(IOException e) {
+			shutdown();
+		}
 	}
 }
