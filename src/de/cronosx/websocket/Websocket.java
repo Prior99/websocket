@@ -65,11 +65,6 @@ public abstract class Websocket extends Thread
 		messageHandlers.remove(handler);
 	}
 	
-	protected void listen() {
-		
-		this.start();
-	}
-	
 	@Override
 	public void run() {
 		for(OpenHandler handler : openHandlers) {

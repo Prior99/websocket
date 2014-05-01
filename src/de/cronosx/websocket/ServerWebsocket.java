@@ -4,6 +4,7 @@ import java.io.*;
 import java.net.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import sun.misc.BASE64Encoder;
 
 public class ServerWebsocket extends Websocket
 {
@@ -18,7 +19,7 @@ public class ServerWebsocket extends Websocket
 		response = new HTTP();
 		readHeader();
 		sendHeader();
-		super.listen();
+		start();
 	}
 	
 	private void readHeader() throws IOException {
@@ -29,10 +30,13 @@ public class ServerWebsocket extends Websocket
 		String host = request.get("Host");
 		String key = request.get("Sec-WebSocket-Key");
 		
+		System.out.println("WEBSCOKET-KEY:"+key);
+		System.out.println("HOST:"+host);
+		
 		response.setRequest("HTTP/1.1 101 Switching Protocols");
 		response.add("Connection", "Upgrade");
 		response.add("Upgrade", "websocket");
-		response.add("Sec-Websocket-Host", request.get("Host"));
+		response.add("Sec-Websocket-Host", host);
 		response.add("Sec-Websocket-Accept", generateHandshake(key));
 		response.writeHeader(socket.getOutputStream());
 	}
@@ -40,7 +44,7 @@ public class ServerWebsocket extends Websocket
 	private static String generateHandshake(String key) {
 		try {
 			MessageDigest md = MessageDigest.getInstance("SHA-1");
-			return byteToHexString(md.digest((key + "globalUniqueIdentifier").getBytes()));
+			return javax.xml.bind.DatatypeConverter.printBase64Binary(md.digest((key + globalUniqueIdentifier).getBytes()));
 		} 
 		catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();

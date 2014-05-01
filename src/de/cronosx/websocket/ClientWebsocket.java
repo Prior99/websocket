@@ -21,9 +21,12 @@ public class ClientWebsocket extends Websocket {
 		super(socket);
 		request = new HTTP();
 		response = new HTTP();
+	}
+	
+	public void listen() throws IOException {
 		sendHeader();
 		readHeader();
-		super.listen();
+		start();
 	}
 	
 	public HTTP getRequest() {

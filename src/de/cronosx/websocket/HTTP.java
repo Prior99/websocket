@@ -3,6 +3,8 @@ package de.cronosx.websocket;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class HTTP
 {
@@ -34,9 +36,9 @@ public class HTTP
 			}
 			else {
 				int index = line.indexOf(":");
-				String key = line.substring(0, index);
-				String value = URLDecoder.decode(line.substring(index + 1, line.length()));
-				map.put(key, value);
+				String key = line.substring(0, index).trim();
+				String value = URLDecoder.decode(line.substring(index + 1, line.length()), "UTF-8").trim();
+				map.put(key.toLowerCase(), value);
 			}
 		}
 	}
@@ -50,10 +52,18 @@ public class HTTP
 			throw new UnsupportedOperationException("You may not write to a header that was previously read.");
 		mode = Mode.write;
 		PrintWriter pw = new PrintWriter(stream);
+		pw.println(request + "\r");
 		for(String key : map.keySet()) {
-			pw.println(key + ":" + URLEncoder.encode(map.get(key)));
+			String s = map.get(key);
+			if(s != null) {
+				try {
+					pw.println(key + ":" + URLEncoder.encode(s, "UTF-8") +"\r");
+				} catch (UnsupportedEncodingException e) {
+					
+				}
+			}
 		}
-		pw.println();
+		pw.println("\r");
 		pw.flush();
 	}
 	
