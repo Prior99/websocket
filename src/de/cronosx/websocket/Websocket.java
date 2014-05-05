@@ -18,9 +18,10 @@ import java.util.*;
  */
 
 /**
- * @author prior
- * This is a wrapped socket that parses the pure byte-input with the Websocketprotocol and return the decoded code
+ * This is a wrapped socket that parses the pure byte-input with the Websocketprotocol and returns the decoded code
  * and the other way around encrypts messages and passes them to the client
+ * 
+ * @author prior (Frederick Gnodtke)
  */
 public abstract class Websocket extends Thread
 {
@@ -32,6 +33,14 @@ public abstract class Websocket extends Thread
 	private final List<OpenHandler> openHandlers;
 	private final List<MessageHandler> messageHandlers;
 	
+	/**
+	 * Wraps a new Websocket around the supplied socket.
+	 * 
+	 * @param socket
+	 * The socket to wrap the Websocket around.
+	 * @throws IOException 
+	 * If the streams cannot be opened.
+	 */
 	public Websocket(final Socket socket) throws IOException {
 		closeHandlers = new LinkedList<CloseHandler>();
 		openHandlers = new LinkedList<OpenHandler>();
@@ -41,26 +50,69 @@ public abstract class Websocket extends Thread
 		this.outputStream = socket.getOutputStream();
 	}
 	
+	/**
+	 * Adds a new CloseHandler to the list of CloseHandlers that will be called
+	 * when the socket is closed.
+	 * Keep in mind, that Websockets may be closed from the remote side.
+	 * 
+	 * @param handler 
+	 * The Handler to add
+	 */
 	public void addCloseHandler(CloseHandler handler) {
 		closeHandlers.add(handler);
 	}
 	
+	/**
+	 * Removes a Handler from the list of known CloseHandlers so it will no
+	 * further be called if the socket is closed.
+	 * 
+	 * @param handler 
+	 * The Handler to remove
+	 */
 	public void removeCloseHandler(CloseHandler handler) {
 		closeHandlers.remove(handler);
 	}
 	
+	/**
+	 * Adds a new OpenHandler to the list of OpenHandlers that will be called
+	 * when the socket is opened and can now send an receive messages.
+	 * 
+	 * @param handler 
+	 * The Handler to add
+	 */
 	public void addOpenHandler(OpenHandler handler) {
 		openHandlers.add(handler);
 	}
 	
+	/**
+	 * Removes a Handler from the list of known OpenHandlers so it will no
+	 * further be called if the socket is opened.
+	 * 
+	 * @param handler 
+	 * The Handler to remove
+	 */
 	public void removeOpenHandler(OpenHandler handler) {
 		openHandlers.remove(handler);
 	}
 	
+	/**
+	 * Adds a new MessageHandler to the list of MessageHandlers that will be called
+	 * when a new message is read from the socket.
+	 * 
+	 * @param handler 
+	 * The Handler to add
+	 */
 	public void addMessageHandler(MessageHandler handler) {
 		messageHandlers.add(handler);
 	}
 	
+	/**
+	 * Removes a Handler from the list of known MessageHandlers so it will no
+	 * further be called if the socket received a new message.
+	 * 
+	 * @param handler 
+	 * The Handler to remove
+	 */
 	public void removeMessageHandler(MessageHandler handler) {
 		messageHandlers.remove(handler);
 	}
@@ -213,6 +265,12 @@ public abstract class Websocket extends Thread
 		}
 	}
 	
+	/**
+	 * Will softly and correctly close the socket.
+	 * This message will send the corresponding closing-frame to the remote side
+	 * so the Websocket is closed gently.
+	 * Please use this method instead of closing the underlying socket directly.
+	 */
 	public void close() {
 		int opcode = 128 | 8; // Indicates a closing frame
 		int len = 0; //Indicates an empty message
@@ -227,6 +285,17 @@ public abstract class Websocket extends Thread
 		shutdown();
 	}
 	
+	/**
+	 * Will send a message to the remote side.
+	 * Please note that this implementation of Websockets is
+	 *   a) considering each message as a textual messages, binary data will also
+	 *      be send as a textual-frame (such as all browsers do)
+	 *   b) not able to send messages larger than 2GBs
+	 *   c) not able to send multi-framed messages.
+	 * 
+	 * @param string 
+	 * The message to send.
+	 */
 	public void send(String string)  {
 		try {
 			byte[] bytes = string.getBytes();

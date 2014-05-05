@@ -4,14 +4,29 @@ import java.io.*;
 import java.net.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import sun.misc.BASE64Encoder;
 
+/**
+ * A implementation of a serverside websocket that is handling the specific 
+ * HTTP-Header on the serverside of a websocket-initialization.
+ * 
+ * @author prior (Frederick Gnodtke)
+ */
 public class ServerWebsocket extends Websocket
 {
 	private final HTTP response;
 	private final HTTP request;	
 	private final static String globalUniqueIdentifier = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 	
+	/**
+	 * Will instance a new ServerWebsocket wrapped around a raw TCP-Socket,
+	 * handle everything specific to the required HTTP-Headers and open up the
+	 * socket.
+	 * 
+	 * @param socket
+	 * Socket to wrap around.
+	 * @throws IOException 
+	 * If unable to open the streams correctly.
+	 */
 	public ServerWebsocket(Socket socket) throws IOException
 	{
 		super(socket);
