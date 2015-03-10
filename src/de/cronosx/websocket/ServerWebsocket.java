@@ -45,9 +45,6 @@ public class ServerWebsocket extends Websocket
 		String host = request.get("Host");
 		String key = request.get("Sec-WebSocket-Key");
 		
-		System.out.println("WEBSCOKET-KEY:"+key);
-		System.out.println("HOST:"+host);
-		
 		response.setRequest("HTTP/1.1 101 Switching Protocols");
 		response.add("Connection", "Upgrade");
 		response.add("Upgrade", "websocket");
